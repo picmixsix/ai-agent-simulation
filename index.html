@@ -1,177 +1,507 @@
+
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-width=1.0">
-    <title>AI Agent 3D Virtual Office</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procedural Ultra-Detailed 3D Office</title>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            width: 100vw; height: 100vh; overflow: hidden; 
+            background-color: #020617; /* Very dark blue cinematic background */
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #1e1e1e;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+        
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #38bdf8; font-size: 1.2rem; font-weight: bold; pointer-events: none;
+            z-index: 10; transition: opacity 0.8s; text-transform: uppercase; letter-spacing: 2px;
         }
         
-        /* Dashboard Overlay */
-        #ui-dashboard {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(15, 23, 42, 0.85);
-            border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 20px;
-            color: white;
-            width: 300px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(4px);
-            z-index: 10;
-        }
-
-        .header {
-            font-size: 1.2rem;
-            font-weight: bold;
-            margin-bottom: 15px;
-            border-bottom: 1px solid #475569;
-            padding-bottom: 10px;
-        }
-
-        .stat-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-            font-size: 0.9rem;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: #334155;
-            border-radius: 4px;
-            margin-top: 5px;
-            overflow: hidden;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: #10b981; /* Green */
-            width: 80%; /* Statis untuk testing */
-        }
-
-        .energy-fill { background: #3b82f6; width: 65%; }
-        
-        .current-action {
-            margin-top: 15px;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 6px;
-            font-size: 0.85rem;
-            color: #94a3b8;
+        #ui-layer {
+            position: absolute; bottom: 20px; left: 20px; color: #94a3b8;
+            background: rgba(15, 23, 42, 0.8); padding: 15px; border-radius: 8px;
+            border: 1px solid #334155; pointer-events: none; backdrop-filter: blur(5px);
         }
     </style>
 </head>
 <body>
-
-    <!-- UI Overlay -->
-    <div id="ui-dashboard">
-        <div class="header">Agent Status: Budi-01</div>
-        
-        <div class="stat-row">
-            <span>Fokus Kerja</span>
-            <span>80%</span>
-        </div>
-        <div class="progress-bar"><div class="progress-fill"></div></div>
-        <br>
-        <div class="stat-row">
-            <span>Energi (Stamina)</span>
-            <span>65%</span>
-        </div>
-        <div class="progress-bar"><div class="progress-fill energy-fill"></div></div>
-
-        <div class="current-action">
-            <strong>Aktivitas Saat Ini:</strong><br>
-            Sedang menuju Gedung YouTube untuk render video recap...
-        </div>
+    <div id="loading">Generating Procedural World...</div>
+    <div id="ui-layer">
+        <strong>100% Procedural Generation</strong><br>
+        <span style="font-size: 0.85rem;">Left Click: Rotate | Right Click: Pan | Scroll: Zoom</span>
     </div>
 
-    <!-- Script Three.js dari CDN -->
+    <!-- Three.js Core and OrbitControls -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
     <script>
-        // 1. Setup Scene, Camera, & Renderer
+        // ==========================================
+        // 1. SCENE, CAMERA, & RENDERER SETUP
+        // ==========================================
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color('#87CEEB'); // Warna langit cerah
+        scene.background = new THREE.Color('#0f172a');
+        scene.fog = new THREE.FogExp2('#0f172a', 0.008);
 
-        // Menggunakan Isometric Camera Perspective
-        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(20, 20, 20);
-        camera.lookAt(0, 0, 0);
+        // Near-orthographic perspective (Low FOV, High Position)
+        const camera = new THREE.PerspectiveCamera(25, window.innerWidth / window.innerHeight, 1, 1000);
+        camera.position.set(60, 50, 60);
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
         document.body.appendChild(renderer.domElement);
 
-        // 2. Setup Pencahayaan
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
-        
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(10, 20, 10);
-        dirLight.castShadow = true;
-        scene.add(dirLight);
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2.2;
+        controls.target.set(0, 2, 0);
 
-        // 3. Membuat Permukaan Tanah (Ground)
-        const groundGeometry = new THREE.PlaneGeometry(30, 30);
-        const groundMaterial = new THREE.MeshStandardMaterial({ color: '#4ade80' }); // Hijau rumput
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        ground.rotation.x = -Math.PI / 2;
-        ground.receiveShadow = true;
-        scene.add(ground);
+        // ==========================================
+        // 2. PROCEDURAL TEXTURES
+        // ==========================================
+        function createGridTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            // Base tile color
+            ctx.fillStyle = '#1e293b'; 
+            ctx.fillRect(0, 0, 512, 512);
+            
+            // Grid lines
+            ctx.strokeStyle = '#0f172a';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(0, 0, 512, 512);
+            
+            // Subtle sub-grid
+            ctx.strokeStyle = 'rgba(51, 65, 85, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(256, 0); ctx.lineTo(256, 512);
+            ctx.moveTo(0, 256); ctx.lineTo(512, 256);
+            ctx.stroke();
 
-        // 4. Membangun Gedung-Gedung
-        function createBuilding(color, x, z, name) {
-            const geometry = new THREE.BoxGeometry(4, 6, 4);
-            const material = new THREE.MeshStandardMaterial({ color: color });
-            const building = new THREE.Mesh(geometry, material);
-            building.position.set(x, 3, z); // Y=3 agar berdiri di atas tanah
-            building.castShadow = true;
-            scene.add(building);
-            return building;
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(30, 30); // Repeat across floor
+            tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            return tex;
         }
 
-        // Gedung Merah (YouTube) & Gedung Hitam (TikTok)
-        createBuilding('#ef4444', -8, -8, 'YouTube HQ'); 
-        createBuilding('#171717', 8, -8, 'TikTok HQ');
+        // ==========================================
+        // 3. LIGHTING & MATERIALS
+        // ==========================================
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
 
-        // 5. Membuat AI Agent
-        const agentGeometry = new THREE.SphereGeometry(1, 32, 32);
-        const agentMaterial = new THREE.MeshStandardMaterial({ color: '#facc15' }); // Kuning
-        const agent = new THREE.Mesh(agentGeometry, agentMaterial);
-        agent.position.set(0, 1, 0);
-        agent.castShadow = true;
-        scene.add(agent);
+        const dirLight = new THREE.DirectionalLight(0xfff5e6, 1.5);
+        dirLight.position.set(30, 50, 20);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 10;
+        dirLight.shadow.camera.far = 150;
+        dirLight.shadow.camera.left = -30;
+        dirLight.shadow.camera.right = 30;
+        dirLight.shadow.camera.top = 30;
+        dirLight.shadow.camera.bottom = -30;
+        dirLight.shadow.bias = -0.0005;
+        scene.add(dirLight);
 
-        // 6. Animasi Loop Sederhana (Agent bergerak memutar)
-        let angle = 0;
+        const mats = {
+            floor: new THREE.MeshStandardMaterial({ map: createGridTexture(), roughness: 0.8 }),
+            glass: new THREE.MeshPhysicalMaterial({ 
+                color: 0xffffff, transmission: 0.9, opacity: 1, transparent: true,
+                roughness: 0.1, metalness: 0.2, ior: 1.5, thickness: 1.0, side: THREE.DoubleSide
+            }),
+            frame: new THREE.MeshStandardMaterial({ color: '#111827', roughness: 0.5, metalness: 0.8 }),
+            wood: new THREE.MeshStandardMaterial({ color: '#8b5a2b', roughness: 0.7 }),
+            concrete: new THREE.MeshStandardMaterial({ color: '#64748b', roughness: 0.9 }),
+            soil: new THREE.MeshStandardMaterial({ color: '#271c19', roughness: 1.0 }),
+            plant: new THREE.MeshStandardMaterial({ color: '#16a34a', roughness: 0.6 }),
+            plantDark: new THREE.MeshStandardMaterial({ color: '#15803d', roughness: 0.7 }),
+            sofa: new THREE.MeshStandardMaterial({ color: '#e11d48', roughness: 0.9 }), // Crimson lounge
+            rug: new THREE.MeshStandardMaterial({ color: '#0ea5e9', roughness: 1.0 }), // Blue patterned look
+            
+            // Character specific
+            skin: new THREE.MeshStandardMaterial({ color: '#fde047', roughness: 0.4 }),
+            beanie: new THREE.MeshStandardMaterial({ color: '#ea580c', roughness: 0.9 }),
+            glasses: new THREE.MeshStandardMaterial({ color: '#000000', roughness: 0.2, metalness: 0.8 }),
+            shirtOrange: new THREE.MeshStandardMaterial({ color: '#f97316', roughness: 0.9 }),
+            shirtWhite: new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.9 }),
+            vest: new THREE.MeshStandardMaterial({ color: '#1e293b', roughness: 0.9 }),
+            pants: new THREE.MeshStandardMaterial({ color: '#4d7c0f', roughness: 0.9 }),
+            shoeWhite: new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.5 }),
+            shoeSole: new THREE.MeshStandardMaterial({ color: '#fbbf24', roughness: 0.5 })
+        };
+
+        function applyShadows(group) {
+            group.traverse((c) => {
+                if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; }
+            });
+        }
+
+        // ==========================================
+        // 4. ENVIRONMENT GENERATORS
+        // ==========================================
+        function createFloor() {
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), mats.floor);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            return floor;
+        }
+
+        function createGlassRoom(width, depth, height) {
+            const group = new THREE.Group();
+            
+            // Walls (Glass)
+            const wGeo1 = new THREE.BoxGeometry(width, height, 0.2);
+            const wGeo2 = new THREE.BoxGeometry(0.2, height, depth);
+            
+            const wallBack = new THREE.Mesh(wGeo1, mats.glass); wallBack.position.set(0, height/2, -depth/2);
+            const wallFront = new THREE.Mesh(wGeo1, mats.glass); wallFront.position.set(0, height/2, depth/2);
+            const wallLeft = new THREE.Mesh(wGeo2, mats.glass); wallLeft.position.set(-width/2, height/2, 0);
+            
+            // Door frame (Right side)
+            const frameGeo = new THREE.BoxGeometry(0.3, height, 0.3);
+            const doorFrame1 = new THREE.Mesh(frameGeo, mats.frame); doorFrame1.position.set(width/2, height/2, depth/4);
+            const doorFrame2 = new THREE.Mesh(frameGeo, mats.frame); doorFrame2.position.set(width/2, height/2, -depth/4);
+
+            // Ceiling frame
+            const ceilFrame = new THREE.Mesh(new THREE.BoxGeometry(width + 0.4, 0.4, depth + 0.4), mats.frame);
+            ceilFrame.position.y = height;
+
+            // Interior light (Neon aesthetic)
+            const pLight = new THREE.PointLight(0x38bdf8, 1, 20);
+            pLight.position.set(0, height - 1, 0);
+
+            // Meeting table inside
+            const table = new THREE.Mesh(new THREE.CylinderGeometry(width*0.3, width*0.3, 0.2, 32), mats.wood);
+            table.position.y = 1.5;
+            const tableLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.4), mats.frame);
+            tableLeg.position.y = 0.7;
+
+            group.add(wallBack, wallFront, wallLeft, doorFrame1, doorFrame2, ceilFrame, pLight, table, tableLeg);
+            applyShadows(group);
+            // Fix glass shadows (disable them for transparency realism)
+            wallBack.castShadow = false; wallFront.castShadow = false; wallLeft.castShadow = false;
+            
+            return group;
+        }
+
+        function createPlanter(width, depth) {
+            const group = new THREE.Group();
+            
+            // Stone Border
+            const borderGeo = new THREE.BoxGeometry(width, 1.2, depth);
+            const border = new THREE.Mesh(borderGeo, mats.concrete);
+            border.position.y = 0.6;
+            
+            // Soil (slightly smaller and higher)
+            const soil = new THREE.Mesh(new THREE.BoxGeometry(width - 0.4, 1.21, depth - 0.4), mats.soil);
+            soil.position.y = 0.6;
+            
+            group.add(border, soil);
+
+            // Procedural Plants (Spheres)
+            const plantCount = Math.floor(width * depth * 0.8);
+            for(let i=0; i<plantCount; i++) {
+                const isDark = Math.random() > 0.5;
+                const radius = 0.4 + Math.random() * 0.6;
+                const plant = new THREE.Mesh(new THREE.DodecahedronGeometry(radius, 1), isDark ? mats.plantDark : mats.plant);
+                
+                const px = (Math.random() - 0.5) * (width - 1);
+                const pz = (Math.random() - 0.5) * (depth - 1);
+                plant.position.set(px, 1.2 + radius/2, pz);
+                
+                // Add slight organic rotation
+                plant.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, 0);
+                group.add(plant);
+            }
+
+            applyShadows(group);
+            return group;
+        }
+
+        function createLongBar() {
+            const group = new THREE.Group();
+            
+            // Main Table
+            const top = new THREE.Mesh(new THREE.BoxGeometry(16, 0.3, 3), mats.wood);
+            top.position.y = 2.5;
+            
+            // Base block
+            const base = new THREE.Mesh(new THREE.BoxGeometry(14, 2.5, 1.5), mats.frame);
+            base.position.y = 1.25;
+            
+            group.add(top, base);
+
+            // Stools
+            for(let x = -6; x <= 6; x += 3) {
+                const stool = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.2, 16), mats.wood);
+                stool.position.set(x, 1.8, 2.5);
+                const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.7), mats.frame);
+                leg.position.set(x, 0.85, 2.5);
+                const baseStool = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.1), mats.frame);
+                baseStool.position.set(x, 0.05, 2.5);
+                group.add(stool, leg, baseStool);
+            }
+
+            applyShadows(group);
+            return group;
+        }
+
+        function createLounge() {
+            const group = new THREE.Group();
+            
+            // Rug
+            const rug = new THREE.Mesh(new THREE.BoxGeometry(12, 0.05, 12), mats.rug);
+            rug.position.y = 0.025;
+            
+            // L-Sofa (Modular boxes)
+            const sGeo1 = new THREE.BoxGeometry(8, 1, 2.5);
+            const sGeo2 = new THREE.BoxGeometry(2.5, 1, 6);
+            const backGeo1 = new THREE.BoxGeometry(8, 1.5, 0.8);
+            const backGeo2 = new THREE.BoxGeometry(0.8, 1.5, 6);
+
+            // Part 1 (Horizontal)
+            const s1 = new THREE.Mesh(sGeo1, mats.sofa); s1.position.set(0, 0.5, -3.75);
+            const b1 = new THREE.Mesh(backGeo1, mats.sofa); b1.position.set(0, 1.25, -4.6);
+            
+            // Part 2 (Vertical)
+            const s2 = new THREE.Mesh(sGeo2, mats.sofa); s2.position.set(-2.75, 0.5, 0.5);
+            const b2 = new THREE.Mesh(backGeo2, mats.sofa); b2.position.set(-3.6, 1.25, 0.5);
+
+            // Coffee Table
+            const tTop = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.2, 32), mats.glass);
+            tTop.position.set(1.5, 0.8, -1);
+            const tLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.7, 16), mats.wood);
+            tLeg.position.set(1.5, 0.35, -1);
+
+            group.add(rug, s1, b1, s2, b2, tTop, tLeg);
+            applyShadows(group);
+            tTop.castShadow = false; // Glass table
+            return group;
+        }
+
+        // ==========================================
+        // 5. THE CHARACTER BUILDER
+        // ==========================================
+        function createCharacter() {
+            const charGrp = new THREE.Group();
+            charGrp.scale.set(1.5, 1.5, 1.5); // Cute stylized proportions
+
+            // -- HIERARCHY SYSTEM --
+            const root = new THREE.Group(); root.position.y = 1.3;
+            const torsoGrp = new THREE.Group(); root.add(torsoGrp);
+            const headGrp = new THREE.Group(); headGrp.position.y = 1.2; torsoGrp.add(headGrp);
+            
+            // -- HEAD & ACCESSORIES --
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.7, 32, 32), mats.skin);
+            headGrp.add(head);
+
+            // Beanie (Perfect hemisphere using phi/theta)
+            const beanie = new THREE.Mesh(new THREE.SphereGeometry(0.72, 32, 16, 0, Math.PI*2, 0, Math.PI/2), mats.beanie);
+            beanie.position.y = 0.1;
+            const beanieRim = new THREE.Mesh(new THREE.TorusGeometry(0.71, 0.12, 16, 32), mats.beanie);
+            beanieRim.rotation.x = Math.PI / 2;
+            beanieRim.position.y = 0.1;
+            headGrp.add(beanie, beanieRim);
+
+            // Glasses
+            const glassGeo = new THREE.TorusGeometry(0.25, 0.05, 16, 32);
+            const lGlass = new THREE.Mesh(glassGeo, mats.glasses); lGlass.position.set(-0.3, 0, 0.65);
+            const rGlass = new THREE.Mesh(glassGeo, mats.glasses); rGlass.position.set(0.3, 0, 0.65);
+            const bridge = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.2), mats.glasses);
+            bridge.rotation.z = Math.PI/2; bridge.position.set(0, 0, 0.68);
+            
+            // Temples (ganggang kacamata)
+            const temple = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.6), mats.glasses);
+            temple.rotation.x = Math.PI/2;
+            const lTemple = temple.clone(); lTemple.position.set(-0.55, 0, 0.35);
+            const rTemple = temple.clone(); rTemple.position.set(0.55, 0, 0.35);
+            headGrp.add(lGlass, rGlass, bridge, lTemple, rTemple);
+
+            // Eyes
+            const eyeGeo = new THREE.SphereGeometry(0.08, 16, 16);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            const lEye = new THREE.Mesh(eyeGeo, eyeMat); lEye.position.set(-0.3, 0, 0.65);
+            const rEye = new THREE.Mesh(eyeGeo, eyeMat); rEye.position.set(0.3, 0, 0.65);
+            headGrp.add(lEye, rEye);
+
+            // -- TORSO (Striped Shirt & Vest) --
+            // Stacked cylinders for stripes
+            const sR = 0.6;
+            for(let i=0; i<6; i++) {
+                const isOrange = i % 2 === 0;
+                const stripe = new THREE.Mesh(new THREE.CylinderGeometry(sR, sR, 0.2, 32), isOrange ? mats.shirtOrange : mats.shirtWhite);
+                stripe.position.y = (i * 0.2) - 0.5;
+                torsoGrp.add(stripe);
+            }
+            
+            // Vest (Open cylinder)
+            const vest = new THREE.Mesh(new THREE.CylinderGeometry(0.63, 0.63, 1.2, 32, 1, true, Math.PI * 0.15, Math.PI * 1.7), mats.vest);
+            torsoGrp.add(vest);
+
+            // -- ARMS & WATCH --
+            const armGeo = new THREE.CylinderGeometry(0.18, 0.15, 1.1, 16);
+            const handGeo = new THREE.SphereGeometry(0.25, 16, 16);
+
+            // Left Arm
+            const lArm = new THREE.Group(); lArm.position.set(-0.8, 0.4, 0);
+            const lArmMesh = new THREE.Mesh(armGeo, mats.skin); lArmMesh.position.y = -0.55;
+            const lHand = new THREE.Mesh(handGeo, mats.skin); lHand.position.y = -1.1;
+            
+            // Smartwatch on left wrist
+            const watchBand = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.05, 16, 16), mats.vest);
+            watchBand.rotation.x = Math.PI/2; watchBand.position.y = -0.9;
+            const watchFace = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.18, 0.15), mats.glasses);
+            watchFace.position.set(0, -0.9, 0.15);
+            lArm.add(lArmMesh, lHand, watchBand, watchFace);
+            torsoGrp.add(lArm);
+
+            // Right Arm
+            const rArm = new THREE.Group(); rArm.position.set(0.8, 0.4, 0);
+            const rArmMesh = new THREE.Mesh(armGeo, mats.skin); rArmMesh.position.y = -0.55;
+            const rHand = new THREE.Mesh(handGeo, mats.skin); rHand.position.y = -1.1;
+            rArm.add(rArmMesh, rHand);
+            torsoGrp.add(rArm);
+
+            // -- LEGS (Cargo Pants) --
+            const legGeo = new THREE.CylinderGeometry(0.35, 0.3, 1.2, 16);
+            const pocketGeo = new THREE.BoxGeometry(0.2, 0.4, 0.4);
+            
+            const lLeg = new THREE.Group(); lLeg.position.set(-0.35, -0.6, 0);
+            const lLegMesh = new THREE.Mesh(legGeo, mats.pants); lLegMesh.position.y = -0.6;
+            const lPocket = new THREE.Mesh(pocketGeo, mats.pants); lPocket.position.set(-0.35, -0.5, 0.1);
+            lLeg.add(lLegMesh, lPocket);
+            
+            const rLeg = new THREE.Group(); rLeg.position.set(0.35, -0.6, 0);
+            const rLegMesh = new THREE.Mesh(legGeo, mats.pants); rLegMesh.position.y = -0.6;
+            const rPocket = new THREE.Mesh(pocketGeo, mats.pants); rPocket.position.set(0.35, -0.5, 0.1);
+            rLeg.add(rLegMesh, rPocket);
+
+            // -- SHOES --
+            function createShoe() {
+                const shoeGrp = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.3, 0.6), mats.shoeWhite);
+                body.position.set(0, 0.15, 0.1);
+                const toe = new THREE.Mesh(new THREE.SphereGeometry(0.225, 16, 16), mats.shoeWhite);
+                toe.position.set(0, 0.15, 0.4);
+                const sole = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.85), mats.shoeSole);
+                sole.position.set(0, 0.04, 0.15);
+                shoeGrp.add(body, toe, sole);
+                return shoeGrp;
+            }
+
+            const lShoe = createShoe(); lShoe.position.y = -1.2; lLeg.add(lShoe);
+            const rShoe = createShoe(); rShoe.position.y = -1.2; rLeg.add(rShoe);
+
+            root.add(lLeg, rLeg);
+            charGrp.add(root);
+            applyShadows(charGrp);
+
+            // Store parts for animation loop
+            charGrp.userData = { torso: torsoGrp, head: headGrp, lArm, rArm };
+            return charGrp;
+        }
+
+        // ==========================================
+        // 6. SCENE ASSEMBLY
+        // ==========================================
+        scene.add(createFloor());
+
+        // 6a. Glass Rooms (Back Left)
+        const room1 = createGlassRoom(16, 12, 8);
+        room1.position.set(-15, 0, -15);
+        scene.add(room1);
+
+        const room2 = createGlassRoom(12, 12, 8);
+        room2.position.set(-30, 0, -15);
+        scene.add(room2);
+
+        // 6b. Planters
+        const planter1 = createPlanter(25, 4);
+        planter1.position.set(10, 0, -10);
+        scene.add(planter1);
+
+        const planter2 = createPlanter(4, 15);
+        planter2.position.set(25, 0, 5);
+        scene.add(planter2);
+
+        // 6c. Long Communal Bar (Back Right)
+        const bar = createLongBar();
+        bar.position.set(10, 0, -18);
+        scene.add(bar);
+
+        // 6d. Lounge Area (Front Left)
+        const lounge = createLounge();
+        lounge.position.set(-15, 0, 15);
+        scene.add(lounge);
+
+        // 6e. Centerpiece Character
+        const mainChar = createCharacter();
+        mainChar.position.set(0, 0, 0);
+        mainChar.rotation.y = Math.PI / 6; // Angled slightly towards camera
+        scene.add(mainChar);
+
+        // Remove loading overlay
+        setTimeout(() => {
+            document.getElementById('loading').style.opacity = '0';
+        }, 1000);
+
+        // ==========================================
+        // 7. ANIMATION LOOP
+        // ==========================================
+        const clock = new THREE.Clock();
+
         function animate() {
             requestAnimationFrame(animate);
+            const t = clock.getElapsedTime();
 
-            // Membuat agent bergerak sedikit (sebagai placeholder sebelum ada logic LLM)
-            angle += 0.02;
-            agent.position.x = Math.sin(angle) * 5;
-            agent.position.z = Math.cos(angle) * 5;
+            // Procedural Character Idle Animation
+            if (mainChar.userData) {
+                const { torso, head, lArm, rArm } = mainChar.userData;
+                
+                // Breathing (Slight Y scaling and positioning)
+                const breath = Math.sin(t * 2);
+                torso.position.y = breath * 0.05;
+                torso.scale.y = 1 + (breath * 0.02);
 
+                // Subtle head movement
+                head.rotation.y = Math.sin(t * 0.8) * 0.1;
+                head.rotation.x = Math.sin(t * 1.5) * 0.05;
+
+                // Gentle arm sway
+                lArm.rotation.x = Math.sin(t * 2) * 0.05;
+                rArm.rotation.x = Math.sin(t * 2 + Math.PI) * 0.05;
+                lArm.rotation.z = 0.1 + Math.sin(t * 1.2) * 0.02;
+                rArm.rotation.z = -0.1 - Math.sin(t * 1.2) * 0.02;
+            }
+
+            controls.update();
             renderer.render(scene, camera);
         }
 
-        // Handle Resize Window
         window.addEventListener('resize', () => {
-            renderer.setSize(window.innerWidth, window.innerHeight);
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
         animate();
     </script>
 </body>
 </html>
+```
